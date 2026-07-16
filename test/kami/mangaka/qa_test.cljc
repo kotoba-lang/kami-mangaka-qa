@@ -1,7 +1,9 @@
 (ns kami.mangaka.qa-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
             [kami.mangaka.qa.axes :as axes]
             [kami.mangaka.qa.geometry :as geo]
+            [kami.mangaka.qa.overlay :as overlay]
             [kami.mangaka.qa.perception :as p]
             [kami.mangaka.qa.score :as score]))
 
@@ -81,6 +83,31 @@
         "out-of-range boxes filtered")
     (is (= [{:x 0.1 :y 0.1 :w 0.8 :h 0.25}]
            (p/detect-panels (fn [_ _] {:panels [{:x 0.1 :y 0.1 :w 0.8 :h 0.25}]}) "QUJD")))))
+
+(deftest overlay-renders-annotated-page-svg
+  (testing "hiccup SVG overlay: panel boxes + badges + reading path + face
+            boxes + score header, serialized by the built-in minimal writer"
+    (let [panels [{:x 0.68 :y 0.05 :w 0.28 :h 0.3}
+                  {:x 0.36 :y 0.05 :w 0.28 :h 0.3}
+                  {:x 0.04 :y 0.45 :w 0.92 :h 0.5}]
+          faces [{:cx 0.5 :cy 0.6 :w 0.15 :h 0.12}]
+          h (overlay/annotated-page {:title "p01 test [grid]"
+                                     :header-entries [[:total 79.1] [:readingPath "1→2→3"]]
+                                     :panels panels :faces faces})
+          svg (overlay/->svg-str h)]
+      (is (= :svg (first h)))
+      (is (str/includes? svg "viewBox=\"0 0 744 1052\""))
+      (is (str/includes? svg (:panel overlay/palette)) "panel palette color present")
+      (is (str/includes? svg (:face overlay/palette)) "face palette color present")
+      (is (str/includes? svg "polyline") "reading path drawn for 3 panels")
+      (is (= 5 (count (re-seq #"<rect" svg))) "3 panel rects + 1 face rect + 1 header bar")
+      (is (str/includes? svg "total=79.1"))
+      (is (str/includes? svg ">1</text>") "badge numbering starts at 1")
+      (is (not (str/includes? svg "<image")) "no base image when :image-href absent")
+      (is (str/includes? (overlay/->svg-str
+                          (overlay/annotated-page {:image-href "data:image/png;base64,AAAA"
+                                                   :panels panels}))
+                         "<image href=\"data:image/png;base64,AAAA\"")))))
 
 (deftest score-aggregation
   (testing "rubric aggregate + v10 mean; stored v10 totals are pass-through, not recomputed"
