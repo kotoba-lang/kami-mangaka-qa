@@ -1,0 +1,103 @@
+(ns kami.mangaka.qa-test
+  (:require [clojure.test :refer [deftest is testing]]
+            [kami.mangaka.qa.axes :as axes]
+            [kami.mangaka.qa.geometry :as geo]
+            [kami.mangaka.qa.perception :as p]
+            [kami.mangaka.qa.score :as score]))
+
+;; 実在する v10 アーティファクト (mangaka-data/ghosthacker/resources/v10/
+;; v10-p00-score.json) の縮約 fixture — 保存済みスコアが正本で、重みは捏造しない。
+(def v10-sample
+  {:scores {:character_visible 9.4 :scene_continuity 7.5 :panel_diversity 9.6
+            :inking_quality 9.5 :composition_bimodal 10 :background_white 2.5
+            :bubble_legibility 10.0 :emotional_impact 9.6 :artifact_freedom 10.0
+            :brightness_avg 10 :silhouette_clarity 10 :panel_coherence 9.2
+            :wasted_lines 3.7 :jump_qa_total 77.4
+            :jump_character_anatomy 8.0 :jump_multi_character_quality 7.0
+            :jump_background_detail 6.0 :jump_composition_pose 8.0
+            :jump_bubble_integration 7.0 :jump_manga_authenticity 9.0
+            :jump_sfx_text 8.0 :jump_environment_detail 8.0}
+   :total 79.1
+   :jump_tier_label "mid-tier (人気作)"
+   :heuristic_total 81.1
+   :jump_qa {:total 77.4 :label "mid-tier (人気作)"
+             :verdict "The page demonstrates strong Death Note-influenced qualities."
+             :issues ["SFX text could be larger."]
+             :model "gemma3:4b" :n_samples 5}
+   :improvement_hints ["…"]
+   :version "v10"})
+
+(deftest axes-registry-round-trips-v10
+  (testing "v10 snake_case keys normalize to the kebab axis registry and back"
+    (let [norm (axes/from-v10 v10-sample)]
+      (is (= 9.4 (get-in norm [:axes :character-visible])))
+      (is (= 8.0 (get-in norm [:axes :jump-character-anatomy])))
+      (is (nil? (get-in norm [:axes :jump-qa-total])) "totals are not axes")
+      (is (= 77.4 (get-in norm [:jump :axes-total])))
+      (is (= 79.1 (:total norm)))
+      (is (= 81.1 (:heuristic-total norm)))
+      (is (= "mid-tier (人気作)" (get-in norm [:jump :tier-label])))
+      (is (= "gemma3:4b" (get-in norm [:jump :model])))
+      (is (= 5 (get-in norm [:jump :n-samples]))))
+    (is (= "character_visible" (axes/->v10-key :character-visible)))
+    (is (= "jump_sfx_text" (axes/->v10-key :jump-sfx-text)))
+    (is (= 13 (count (axes/axis-names :heuristic))))
+    (is (= 8 (count (axes/axis-names :jump))))
+    (is (= 9 (count (axes/axis-names :rubric8))) "8 rubric + :facePresence")))
+
+(deftest geometry-is-pure-and-source-agnostic
+  (testing "overlap / clearance / presence — same math for VLM boxes and authored gaze boxes"
+    (is (< 0.0199 (geo/overlap-area {:x 0.0 :y 0.0 :w 0.2 :h 0.4}
+                                    {:x 0.1 :y 0.2 :w 0.4 :h 0.4}) 0.0201))
+    (let [face {:cx 0.5 :cy 0.5 :w 0.2 :h 0.2}
+          half {:x 0.4 :y 0.4 :w 0.1 :h 0.2}]
+      (is (< 0.49 (- 1.0 (geo/bubble-clearance [half] [face])) 0.51)))
+    (is (= 1.0 (geo/bubble-clearance [] [{:cx 0.5 :cy 0.5 :w 0.1 :h 0.1}])))
+    (is (nil? (geo/face-presence-axis 2 nil)) "no signal is not a penalty")
+    (is (= 0.5 (geo/face-presence-axis 2 1)) "accepts a plain count")
+    (is (= 1.0 (geo/face-presence-axis 1 [{:cx 0.1 :cy 0.1 :w 0.1 :h 0.1}
+                                          {:cx 0.9 :cy 0.1 :w 0.1 :h 0.1}]))
+        "accepts boxes; over-detection capped")))
+
+(deftest reading-order-checks-rtl-vertical
+  (testing "右→左・上→下の読み順 QA"
+    (let [row-y {:y 0.05 :w 0.28 :h 0.3}
+          ok [(merge row-y {:x 0.68}) (merge row-y {:x 0.36}) (merge row-y {:x 0.04})
+              {:x 0.68 :y 0.45 :w 0.28 :h 0.3}]]
+      (is (zero? (geo/reading-order-violations ok)) "right-to-left then next row"))
+    (let [row-y {:y 0.05 :w 0.28 :h 0.3}
+          bad [(merge row-y {:x 0.04}) (merge row-y {:x 0.68})]]
+      (is (= 1 (geo/reading-order-violations bad)) "left-to-right in one row violates"))))
+
+(deftest perception-parsers-validate
+  (testing "prompt+parser layer is pure; vision-fn is an injected capability"
+    (is (= 3 (p/count-faces (fn [_ _] {:count 3}) "QUJD")))
+    (is (nil? (p/count-faces (fn [_ _] nil) "QUJD")) "offline → no signal")
+    (is (nil? (p/count-faces nil "QUJD")) "no capability → no signal")
+    (is (= [{:cx 0.5 :cy 0.4 :w 0.2 :h 0.3}]
+           (p/detect-faces (fn [_ _] {:faces [{:cx 0.5 :cy 0.4 :w 0.2 :h 0.3}
+                                              {:cx 2.0 :cy 0.4 :w 0.2 :h 0.3}]})
+                           "QUJD"))
+        "out-of-range boxes filtered")
+    (is (= [{:x 0.1 :y 0.1 :w 0.8 :h 0.25}]
+           (p/detect-panels (fn [_ _] {:panels [{:x 0.1 :y 0.1 :w 0.8 :h 0.25}]}) "QUJD")))))
+
+(deftest score-aggregation
+  (testing "rubric aggregate + v10 mean; stored v10 totals are pass-through, not recomputed"
+    (is (= 56 (score/aggregate-score {:a 0.5 :b 0.5 :c 0.5 :d 0.5 :e 0.5 :f 0.5 :g 0.5 :h 0.5
+                                      :facePresence 1.0})))
+    (is (nil? (score/aggregate-score {})) "no axes → no signal")
+    (is (= 50 (score/aggregate-score {:a 0.5 :b nil})) "nil axes excluded, not zeroed")
+    (is (= 7.6 (score/mean10 (:axes (axes/from-v10 (update v10-sample :scores
+                                                           select-keys
+                                                           [:jump_character_anatomy
+                                                            :jump_multi_character_quality
+                                                            :jump_background_detail
+                                                            :jump_composition_pose
+                                                            :jump_bubble_integration
+                                                            :jump_manga_authenticity
+                                                            :jump_sfx_text
+                                                            :jump_environment_detail]))))))
+    (is (= {:a 0.5 :facePresence 1.0}
+           (score/merge-perception-axes {:a 0.5} {:facePresence 1.0 :bubbleClearance nil}))
+        "nil perception axes stay absent")))
