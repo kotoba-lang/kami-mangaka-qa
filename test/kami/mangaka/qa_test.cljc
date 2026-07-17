@@ -5,6 +5,7 @@
             [kami.mangaka.qa.geometry :as geo]
             [kami.mangaka.qa.overlay :as overlay]
             [kami.mangaka.qa.perception :as p]
+            [kami.mangaka.qa.recover :as recover]
             [kami.mangaka.qa.score :as score]))
 
 ;; 実在する v10 アーティファクト (mangaka-data/ghosthacker/resources/v10/
@@ -108,6 +109,38 @@
                           (overlay/annotated-page {:image-href "data:image/png;base64,AAAA"
                                                    :panels panels}))
                          "<image href=\"data:image/png;base64,AAAA\"")))))
+
+(deftest recover-parses-and-grounds-page-script
+  (testing "VLM page-script → 正規化 (shot 語彙丸め・cast 照合・index 振り直し)"
+    (let [out {:panels [{:index 2 :shot "CLOSE" :characters ["REN" "somebody"]
+                         :dialogue ["起動した…"] :sfx []}
+                        {:index 5 :shot "weird-angle" :characters []
+                         :dialogue [] :sfx ["ドォン" ""]}]
+               :synopsis "Ren notices the daemon booting."}
+          r (recover/parse-page-script out ["Ren" "Nei" "Yuto"])]
+      (is (= [0 1] (mapv :index (:panels r))) "欠番 index は出現順で振り直し")
+      (is (= "close" (:shot (first (:panels r)))))
+      (is (= "wide" (:shot (second (:panels r)))) "語彙外 shot は wide に丸める")
+      (is (= ["Ren" "unknown"] (:characters (first (:panels r)))) "cast 照合、未知は unknown")
+      (is (= ["ドォン"] (:sfx (second (:panels r)))) "空文字は落とす")
+      (is (string? (:synopsis r))))
+    (is (nil? (recover/parse-page-script nil ["Ren"])) "offline → no signal")
+    (is (nil? (recover/parse-page-script {:panels "x"} ["Ren"])))))
+
+(deftest recover-merges-boxes-and-script
+  (testing "コマ矩形と脚本を読み順で合成; 数の食い違いは切り詰め + 明示"
+    (let [boxes [{:x 0.6 :y 0.0 :w 0.4 :h 0.5} {:x 0.0 :y 0.0 :w 0.55 :h 0.5}
+                 {:x 0.0 :y 0.55 :w 1.0 :h 0.45}]
+          script [{:index 0 :shot "close" :characters ["Ren"] :dialogue ["a"] :sfx []}
+                  {:index 1 :shot "wide" :characters [] :dialogue [] :sfx []}]
+          m (recover/merge-boxes-and-script boxes script)]
+      (is (= 2 (count (:panels m))) "短い方に切り詰め")
+      (is (= [0.6 0.0 0.4 0.5] (:rect (first (:panels m)))))
+      (is (= "close" (:shot (first (:panels m)))))
+      (is (= {:boxes 3 :script 2} (:mismatch m)) "silent truncation にしない"))
+    (is (nil? (:mismatch (recover/merge-boxes-and-script
+                          [{:x 0 :y 0 :w 1 :h 1}]
+                          [{:index 0 :shot "splash" :characters [] :dialogue [] :sfx []}]))))))
 
 (deftest score-aggregation
   (testing "rubric aggregate + v10 mean; stored v10 totals are pass-through, not recomputed"
