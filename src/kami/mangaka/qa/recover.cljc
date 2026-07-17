@@ -17,20 +17,33 @@
   "ページ全体から per-panel の脚本情報を JSON で抽出させる prompt。
   `cast` (既知キャラ名の列) を与えると名前が ground される — 未知の顔を
   勝手に命名させない (キャラ以外は \"unknown\")。`n-panels` は
-  detect-panels の結果 (読み順) と突き合わせるための期待コマ数。"
-  [cast n-panels]
-  (str "This is a finished manga page. Read it in Japanese manga order"
-       " (right-to-left, top-to-bottom). It has approximately " n-panels
-       " panels. For EACH panel, extract: the shot type, which of the known"
-       " characters appear, and any dialogue or SFX text visible."
-       " Known characters: " (str/join ", " cast) "."
-       " Reply with ONLY a JSON object {\"panels\": [{\"index\": <0-based"
-       " reading order>, \"shot\": \"<wide|close|two-shot|splash|over-shoulder"
-       "|establishing>\", \"characters\": [\"<known name or unknown>\"],"
-       " \"dialogue\": [\"<verbatim Japanese text>\"], \"sfx\":"
-       " [\"<sfx text>\"]}], \"synopsis\": \"<one sentence: what happens on"
-       " this page>\"}. Use empty arrays when a panel has no dialogue/sfx."
-       " No prose outside the JSON."))
+  detect-panels の結果 (読み順) と突き合わせるための期待コマ数。
+
+  3-arity: `appearance` (name → 外見記述 の map) を与えると各キャラの見た目
+  ガイドを prompt 先頭に足す。同定戦略の co-scientist (ADR-2607165100
+  addendum 5) の勝者 — cast 名のみだと grounding がほぼ 0 になる量子化
+  gemma4 で、外見記述の添付が grounding を確実に上げた (0→5 顔/ページ、
+  精度 0.0→0.2)。記述が無いキャラは黙って飛ばす。"
+  ([cast n-panels] (page-script-prompt cast n-panels nil))
+  ([cast n-panels appearance]
+   (str (when (seq appearance)
+          (str "Character appearance guide (use to identify who appears):\n"
+               (str/join "\n" (keep (fn [c] (when-let [d (get appearance c)]
+                                              (str "- " c ": " d)))
+                                    cast))
+               "\n\n"))
+        "This is a finished manga page. Read it in Japanese manga order"
+        " (right-to-left, top-to-bottom). It has approximately " n-panels
+        " panels. For EACH panel, extract: the shot type, which of the known"
+        " characters appear, and any dialogue or SFX text visible."
+        " Known characters: " (str/join ", " cast) "."
+        " Reply with ONLY a JSON object {\"panels\": [{\"index\": <0-based"
+        " reading order>, \"shot\": \"<wide|close|two-shot|splash|over-shoulder"
+        "|establishing>\", \"characters\": [\"<known name or unknown>\"],"
+        " \"dialogue\": [\"<verbatim Japanese text>\"], \"sfx\":"
+        " [\"<sfx text>\"]}], \"synopsis\": \"<one sentence: what happens on"
+        " this page>\"}. Use empty arrays when a panel has no dialogue/sfx."
+        " No prose outside the JSON.")))
 
 (def shot-vocab #{"wide" "close" "two-shot" "splash" "over-shoulder" "establishing"})
 

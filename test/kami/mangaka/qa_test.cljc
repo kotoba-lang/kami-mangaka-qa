@@ -127,6 +127,18 @@
     (is (nil? (recover/parse-page-script nil ["Ren"])) "offline → no signal")
     (is (nil? (recover/parse-page-script {:panels "x"} ["Ren"])))))
 
+(deftest recover-prompt-adds-appearance-guide
+  (testing "3-arity で外見ガイドを先頭に足す (同定 co-scientist 勝者)"
+    (let [p (recover/page-script-prompt ["Ren" "Nei"] 4 {"Ren" "sleepy hacker, hoodie"})]
+      (is (str/includes? p "Character appearance guide"))
+      (is (str/includes? p "- Ren: sleepy hacker, hoodie"))
+      (is (not (str/includes? p "- Nei:")) "記述の無いキャラは飛ばす"))
+    (is (not (str/includes? (recover/page-script-prompt ["Ren"] 4) "appearance guide"))
+        "2-arity は従来どおり (ガイドなし)")
+    (is (= (recover/page-script-prompt ["Ren"] 4)
+           (recover/page-script-prompt ["Ren"] 4 nil))
+        "nil appearance は 2-arity と同一")))
+
 (deftest recover-merges-boxes-and-script
   (testing "コマ矩形と脚本を読み順で合成; 数の食い違いは切り詰め + 明示"
     (let [boxes [{:x 0.6 :y 0.0 :w 0.4 :h 0.5} {:x 0.0 :y 0.0 :w 0.55 :h 0.5}
