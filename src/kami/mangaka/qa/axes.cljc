@@ -57,7 +57,31 @@
    {:axis :jump-sfx-text               :v10 "jump_sfx_text"}
    {:axis :jump-environment-detail     :v10 "jump_environment_detail"}])
 
-(def all-sets {:rubric8 rubric8 :heuristic heuristic :jump jump})
+(def page18
+  "完成ページ単位の VLM/構造レビュー軸 (0-100)。パネル単体の美麗さではなく、
+  原作EDNへの忠実性、コマ割り、吹き出し、SFX、身体・小物の整合までを分離して
+  測る。各軸を独立させることで、画像再生成が必要な問題と compose だけで直せる
+  問題を混同しない。"
+  [{:axis :prompt-alignment :repair :panel}
+   {:axis :character-identity :repair :panel}
+   {:axis :required-object-presence :repair :panel}
+   {:axis :spatial-continuity :repair :panel}
+   {:axis :object-orientation :repair :panel}
+   {:axis :action-continuity :repair :panel}
+   {:axis :dialogue-progression :repair :lettering}
+   {:axis :page-composition :repair :layout}
+   {:axis :panel-rhythm :repair :layout}
+   {:axis :reading-flow :repair :layout}
+   {:axis :lettering-quality :repair :lettering}
+   {:axis :balloon-placement :repair :lettering}
+   {:axis :sfx-integration :repair :lettering}
+   {:axis :manga-expression :repair :mixed}
+   {:axis :pose-physics :repair :panel}
+   {:axis :speaker-tail-alignment :repair :lettering}
+   {:axis :semantic-line-breaking :repair :lettering}
+   {:axis :psychological-lettering :repair :lettering}])
+
+(def all-sets {:rubric8 rubric8 :heuristic heuristic :jump jump :page18 page18})
 
 (defn axis-names [set-key] (mapv :axis (all-sets set-key)))
 
