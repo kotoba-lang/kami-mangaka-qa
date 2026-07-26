@@ -46,6 +46,7 @@
     (is (= "jump_sfx_text" (axes/->v10-key :jump-sfx-text)))
     (is (= 13 (count (axes/axis-names :heuristic))))
     (is (= 8 (count (axes/axis-names :jump))))
+    (is (= 18 (count (axes/axis-names :page18))))
     (is (= 9 (count (axes/axis-names :rubric8))) "8 rubric + :facePresence")))
 
 (deftest geometry-is-pure-and-source-agnostic
@@ -173,3 +174,32 @@
     (is (= {:a 0.5 :facePresence 1.0}
            (score/merge-perception-axes {:a 0.5} {:facePresence 1.0 :bubbleClearance nil}))
         "nil perception axes stay absent")))
+
+(deftest page-structure-and-repair-scope
+  (let [page {:panels [{:rect [0.52 0.04 0.44 0.42]
+                        :bubbles [{:text "短い台詞"}]}
+                       {:rect [0.04 0.04 0.44 0.42]
+                        :bubbles [{:text (apply str (repeat 180 "長"))}]}]}
+        structure (score/page-structure page)
+        review (score/page-review {:page-composition 92
+                                   :pose-physics 42
+                                   :balloon-placement 55}
+                                  structure)]
+    (is (= 100.0 (get-in structure [:axes :layout-geometry])))
+    (is (some :lettering/overflow? (:panels structure)))
+    (is (= :mixed (:repair-scope review))
+        "pose requires panel regeneration; balloon/capacity require compose repair")
+    (is (false? (:accepted review)))
+    (is (= #{:pose-physics :balloon-placement}
+           (set (map :axis (:weak-axes review))))))
+  (let [structure (score/page-structure
+                   {:page/panels [{:panel/rect [0.0 0.0 0.6 1.0]}
+                                  {:panel/rect [0.5 0.0 0.5 1.0]}]})]
+    (is (< (get-in structure [:axes :layout-geometry]) 70))
+    (is (some #{:invalid-or-overlapping-panels} (:violations structure)))))
+
+(deftest page-axis-json-normalization
+  (is (= {:page-composition 91 :pose-physics 44 :balloon-placement 70}
+         (score/normalize-page-axes
+          {"page_composition" 91 :posePhysics 44 :balloon-placement 70
+           :unknown_axis 100 :reading_flow "bad"}))))
