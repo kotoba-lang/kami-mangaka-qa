@@ -1,5 +1,5 @@
 (ns kami.mangaka.qa-test
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [clojure.test :refer [deftest is testing]]
             [kami.mangaka.qa.axes :as axes]
             [kami.mangaka.qa.geometry :as geo]

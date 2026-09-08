@@ -7,7 +7,7 @@
     重み付き合成で、重み定義は退役 runtime と共に失われている — 本 lib は
     **保存された値を正本として素通し** (axes/from-v10) し、重みを捏造しない。
     新規計算には mean10 / aggregate-score を使う。"
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [kami.mangaka.qa.axes :as axes]))
 
 (defn- clamp [n lo hi] (max lo (min hi n)))
@@ -25,7 +25,7 @@
                  (-> (name k)
                      (str/replace #"([a-z0-9])([A-Z])" "$1-$2")
                      (str/replace "_" "-")
-                     str/lower-case keyword))]
+                     str/lower keyword))]
     (into {} (keep (fn [[k v]]
                      (let [axis (->axis k)]
                        (when (and (known axis) (number? v)) [axis v])))) m)))
