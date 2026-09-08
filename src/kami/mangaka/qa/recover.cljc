@@ -11,7 +11,7 @@
 
   復元は**推定**であり原本ではない — 呼び出し側は :recovered? true を
   データに焼き、原本 storyboard と混同させないこと。"
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (defn page-script-prompt
   "ページ全体から per-panel の脚本情報を JSON で抽出させる prompt。
@@ -53,16 +53,16 @@
   \"wide\" に丸め、characters は cast 照合 (未知は落とさず \"unknown\")。"
   [out cast]
   (let [panels (:panels out)
-        known (into {} (map (fn [c] [(str/lower-case (str c)) (str c)])) cast)]
+        known (into {} (map (fn [c] [(str/lower (str c)) (str c)])) cast)]
     (when (sequential? panels)
       {:panels
        (vec (map-indexed
              (fn [i p]
                {:index i
-                :shot (let [s (str/lower-case (str (:shot p)))]
+                :shot (let [s (str/lower (str (:shot p)))]
                         (if (shot-vocab s) s "wide"))
                 :characters (vec (keep (fn [c]
-                                         (let [lc (str/lower-case (str c))]
+                                         (let [lc (str/lower (str c))]
                                            (or (known lc)
                                                (some (fn [[k v]]
                                                        (when (str/includes? lc k) v))

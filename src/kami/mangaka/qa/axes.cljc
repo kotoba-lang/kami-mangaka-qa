@@ -14,7 +14,7 @@
 
   v10 score JSON (mangaka-data/ghosthacker/resources/v10/v10-p00-score.json
   が現存する実サンプル) との相互運用は from-v10 / ->v10-key で行う。"
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (def rubric8
   "パネル単位 rubric (0.0-1.0)。:facePresence は知覚レイヤ (VLM 顔カウント vs

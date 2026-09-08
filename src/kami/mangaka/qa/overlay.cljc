@@ -11,7 +11,7 @@
   入力座標はすべて正規化 0..1 (kami.mangaka.qa.geometry と同じ規約) — VLM
   検出 (detect-panels / detect-faces) の出力も、authored な page record の
   gaze box も、そのまま渡せる。内部では viewBox のユーザー単位に展開する。"
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (def palette
   {:panel "#7c4dff"      ; パネル枠 + 読み順 (v10 overlay の紫系)
