@@ -32,8 +32,8 @@ langchain-clj 流の host-capability 方式。JVM / cljs / nbb で同じコー�
 ## Dev
 
 ```bash
-clojure -M:test   # cognitect test-runner
-clojure -M:lint   # clj-kondo
+kbb -M:test   # cognitect test-runner
+kbb -M:lint   # clj-kondo
 ```
 
 Sibling: `kami-mangaka-expression` / `-text` / `-page` / `-scene` / `-render` / `-reader`。
