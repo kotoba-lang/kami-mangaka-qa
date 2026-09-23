@@ -1,6 +1,6 @@
 (ns kami.mangaka.qa-test
   (:require [kotoba.lang.text :as str]
-            [clojure.test :refer [deftest is testing]]
+            [kotoba.test :refer [deftest is testing]]
             [kami.mangaka.qa.axes :as axes]
             [kami.mangaka.qa.geometry :as geo]
             [kami.mangaka.qa.overlay :as overlay]
